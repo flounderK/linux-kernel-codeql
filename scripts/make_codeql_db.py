@@ -22,7 +22,7 @@ def run_make(args):
     # export output directory for build
     os.environ['KBUILD_OUTPUT'] = build_dir
 
-    if not args.skip_make_defconfig and not args.skip_database_create:
+    if not args.dry_run and not args.skip_make_defconfig and not args.skip_database_create:
         os.system(f"make -C {args.linux_repo_dir} distclean")
         os.system(f"make -C {args.linux_repo_dir} defconfig")
 
