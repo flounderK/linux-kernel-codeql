@@ -22,24 +22,35 @@ def run_make(args):
     # export output directory for build
     os.environ['KBUILD_OUTPUT'] = build_dir
 
-    if not args.skip_make_defconfig:
+    if not args.skip_make_defconfig and not args.skip_database_create:
         os.system(f"make -C {args.linux_repo_dir} distclean")
         os.system(f"make -C {args.linux_repo_dir} defconfig")
 
-    codeql_cmd_args = ["codeql",
-                       "database",
-                       "create",
-                       f"'{codeql_linux_db_dir}'",
-                       f"--search-path='{args.codeql_repo_dir}'",
-                       "--language=cpp",
-                       "-s", f"'{args.linux_repo_dir}'",
-                       "-c", f"'{args.cmd}'",
-                       "--overwrite"]
-    codeql_cmd = ' '.join(codeql_cmd_args)
-    print(f"running \"{codeql_cmd}\"")
+    codeql_make_cmd_args = ["codeql",
+                            "database",
+                            "create",
+                            f"'{codeql_linux_db_dir}'",
+                            f"--search-path='{args.codeql_repo_dir}'",
+                            "--language=cpp",
+                            "-s", f"'{args.linux_repo_dir}'",
+                            "-c", f"'{args.cmd}'",
+                            "--overwrite"]
+    codeql_make_cmd = ' '.join(codeql_make_cmd_args)
 
-    if not args.dry_run:
-        os.system(codeql_cmd)
+    print(f"codeql create cmd \"{codeql_make_cmd}\"")
+    if not args.dry_run and not args.skip_database_create:
+        os.system(codeql_make_cmd)
+
+    codeql_analyze_cmd_args = ["codeql",
+                               "database",
+                               "analyze",
+                               f"--search-path='{args.codeql_repo_dir}'",
+                               f"'{codeql_linux_db_dir}'"]
+
+    codeql_analyze_cmd = ' '.join(codeql_analyze_cmd_args)
+    print(f"codeql analyze \"{codeql_analyze_cmd}\"")
+    if not args.dry_run and not args.skip_database_analyze:
+        os.system(codeql_analyze_cmd)
 
 
 def valid_args_and_environment(args):
@@ -82,6 +93,12 @@ if __name__ == "__main__":
                         "repo is already correctly set up")
     parser.add_argument("-c", "--cmd", default='make',
                         help="command to pass to codeql to build the source")
+    parser.add_argument("-sdc", "--skip-database-create", default=False,
+                        action="store_true",
+                        help="don't run database creation")
+    parser.add_argument("-sda", "--skip-database-analyze", default=False,
+                        action="store_true",
+                        help="don't run database analyze")
     parser.add_argument("--dry-run", action="store_true", default=False,
                         help="don't actually run final commands")
 
