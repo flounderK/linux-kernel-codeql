@@ -22,8 +22,10 @@ def run_make(args):
     # export output directory for build
     os.environ['KBUILD_OUTPUT'] = build_dir
 
-    if not args.dry_run and not args.skip_make_defconfig and not args.skip_database_create:
+    if not args.dry_run and args.clean:
         os.system(f"make -C {args.linux_repo_dir} distclean")
+
+    if not args.dry_run and not args.skip_make_defconfig and not args.skip_database_create:
         os.system(f"make -C {args.linux_repo_dir} defconfig")
 
     codeql_make_cmd_args = ["codeql",
@@ -41,16 +43,17 @@ def run_make(args):
     if not args.dry_run and not args.skip_database_create:
         os.system(codeql_make_cmd)
 
-    codeql_analyze_cmd_args = ["codeql",
-                               "database",
-                               "analyze",
-                               f"--search-path='{args.codeql_repo_dir}'",
-                               f"'{codeql_linux_db_dir}'"]
+    # it apears that codeql database analyze is not entirely necessary
+    # codeql_analyze_cmd_args = ["codeql",
+    #                            "database",
+    #                            "analyze",
+    #                            f"--search-path='{args.codeql_repo_dir}'",
+    #                            f"'{codeql_linux_db_dir}'"]
 
-    codeql_analyze_cmd = ' '.join(codeql_analyze_cmd_args)
-    print(f"codeql analyze \"{codeql_analyze_cmd}\"")
-    if not args.dry_run and not args.skip_database_analyze:
-        os.system(codeql_analyze_cmd)
+    # codeql_analyze_cmd = ' '.join(codeql_analyze_cmd_args)
+    # print(f"codeql analyze \"{codeql_analyze_cmd}\"")
+    # if not args.dry_run and not args.skip_database_analyze:
+    #     os.system(codeql_analyze_cmd)
 
 
 def valid_args_and_environment(args):
@@ -101,6 +104,8 @@ if __name__ == "__main__":
                         help="don't run database analyze")
     parser.add_argument("--dry-run", action="store_true", default=False,
                         help="don't actually run final commands")
+    parser.add_argument("--clean", action="store_true", default=False,
+                        help="run make clean first")
 
     args = parser.parse_args()
     if not valid_args_and_environment(args):
