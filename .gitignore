@@ -1,3 +1,5 @@
 *.swp
 **/.cache/**
 **/__pycache__/**
+*.bqrs
+*.csv
