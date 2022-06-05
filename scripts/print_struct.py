@@ -3,12 +3,14 @@ import argparse
 import sys
 import csv
 import re
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+
+StructTuple = namedtuple("StructTuple", ['structname', 'structsize'])
 
 
 def parse_args(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument("structname", help="Name of struct to print")
+    parser.add_argument("-s", "--structname", help="Name of struct to print")
     parser.add_argument("-c", "--csv", help="Path of csv file",
                         default="all_struct_fields.csv")
     args = parser.parse_args(argv)
@@ -44,6 +46,37 @@ def get_contents(file):
         return contents
 
 
+def group_struct_fields(struct_fields):
+    # group structs by struct name and struct size, deduping duplicate fields
+    structsets = defaultdict(set)
+    for s in struct_fields:
+        structsets[(s.structname, s.structsize)].add(s)
+
+    grouped_structs = [list(i) for i in structsets.values()]
+    grouped_structs = [sorted(i, key=lambda a: a.offset) for i in grouped_structs]
+
+    # then store by structname
+    structs = {}
+    for s in grouped_structs:
+        structs[StructTuple(s[0].structname, s[0].structsize)] = s
+    return structs
+
+
+def get_structs_by_name(structs, name):
+    return [i for i in list(structs.keys()) if i.structname == name]
+
+
+def format_struct(structs, struct_key):
+    struct_format = "struct %s {\n%s\n}"
+    field_format = "\t%s %s"
+
+
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
     contents = get_contents(args.csv)
+    structs = group_struct_fields(contents)
+
+    target_name = 'apple_sc_backlight'
+
+
+

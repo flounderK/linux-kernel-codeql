@@ -6,5 +6,5 @@ where
 	structname = t.getName() and
 	field = t.getAField()
 
-select  structname, t.getSize() as structsize, field.getType() as type, field.getName() as fieldname, field.getByteOffset() as offset
+select  structname, t.getSize() as structsize, field.getType() as type, field.getName() as fieldname, field.getByteOffset() as offset, type.getSize() as fieldsize
 
