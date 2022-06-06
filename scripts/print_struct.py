@@ -13,6 +13,15 @@ def parse_args(argv):
     parser.add_argument("-s", "--structname", help="Name of struct to print")
     parser.add_argument("-c", "--csv", help="Path of csv file",
                         default="all_struct_fields.csv")
+    parser.add_argument("-ne", "--no-expand", action='store_true',
+                        default=False)
+    parser.add_argument("-no", "--no-offsets", action='store_true',
+                        default=False)
+    parser.add_argument("-l", "--list", help="List out valid struct names",
+                        action='store_true', default=False)
+    parser.add_argument("--all", help="print all structs", action='store_true',
+                        default=False)
+
     args = parser.parse_args(argv)
     return args
 
@@ -62,44 +71,80 @@ def group_struct_fields(struct_fields):
     return structs
 
 
-def get_structs_by_name(structs, name):
-    return [i for i in list(structs.keys()) if i.structname == name]
+class StructFormatter:
+    def __init__(self, structs, expand=True, offsets=True,
+                 single_tab='  '):
+        self.structs = structs
+        self.expand = expand
+        self.offsets = offsets
+        self.single_tab = single_tab
 
-
-def format_struct(structs, struct_key, tabs='', single_tab='  '):
-    # tabs, structname, fields
-    struct_format = "%sstruct %s {\n%s%s}"
-    # tabs, single_tab, field type, field name
-    field_format = "%s%s%s %s;\n"
-    fields = ''
-    for field in structs[struct_key]:
-        maybe_struct_type = StructTuple(field.type, field.fieldsize)
-        maybe_struct_type_fields = structs.get(maybe_struct_type)
-        if maybe_struct_type_fields is not None \
-                    and field.type.find('<unnamed>') == -1:
-            fields += format_struct(structs, maybe_struct_type,
-                                    tabs + single_tab,
-                                    single_tab)
-            fields += ' %s;\n\n' % field.fieldname
+        if self.offsets:
+            self.struct_format = "%5d: %sstruct %s {\n%s%5d: %s}"
+            self.field_format = "%5d: %s%s%s %s;\n"
         else:
-            fields += field_format % (tabs, single_tab,
-                                      field.type,
-                                      field.fieldname)
+            self.field_format = "%s%s%s %s;\n"
+            self.struct_format = "%sstruct %s {\n%s%s}"
 
-    full_format = struct_format % (tabs,
-                                   struct_key.structname,
-                                   fields, tabs)
+    def get_structs_by_name(self, name):
+        return [i for i in list(self.structs.keys())
+                if i.structname == name]
 
-    return full_format
+    def format_struct(self, struct_key, tabs='', offset=0):
+        # tabs, structname, fields
+        # tabs, single_tab, field type, field name
+        fields = ''
+        for field in self.structs[struct_key]:
+            maybe_struct_type = StructTuple(field.type, field.fieldsize)
+            maybe_struct_type_fields = self.structs.get(maybe_struct_type)
+            # handle embedded struct format
+            if self.expand is True and \
+               maybe_struct_type_fields is not None \
+               and field.type.find('<unnamed>') == -1:
+                fields += self.format_struct(maybe_struct_type,
+                                             tabs + self.single_tab,
+                                             offset + field.offset)
+                fields += ' %s;\n\n' % field.fieldname
+            else:
+                if self.offsets:
+                    field_tuple = (offset + field.offset,
+                                   tabs, self.single_tab,
+                                   field.type,
+                                   field.fieldname)
+                else:
+                    field_tuple = (tabs, self.single_tab,
+                                   field.type,
+                                   field.fieldname)
+                fields += self.field_format % field_tuple
 
+        if self.offsets:
+            struct_tuple = (offset, tabs,
+                            struct_key.structname, fields,
+                            offset + struct_key.structsize, tabs)
+        else:
+            struct_tuple = (tabs, struct_key.structname, fields, tabs)
+        full_format = self.struct_format % struct_tuple
+
+        return full_format
+
+    def print_struct_by_name(self, name):
+        for struct in self.get_structs_by_name(name):
+            print(self.format_struct(struct))
+            print()
 
 
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
     contents = get_contents(args.csv)
     structs = group_struct_fields(contents)
+    sf = StructFormatter(structs, expand=not args.no_expand,
+                         offsets=not args.no_offsets)
 
-    target_name = 'apple_sc_backlight'
-
-
-
+    if args.list:
+        for struct, fields in structs.items():
+            print(struct.structname)
+    elif args.all:
+        for struct in structs.keys():
+            sf.print_struct_by_name(struct.structname)
+    else:
+        sf.print_struct_by_name(args.structname)
