@@ -66,9 +66,32 @@ def get_structs_by_name(structs, name):
     return [i for i in list(structs.keys()) if i.structname == name]
 
 
-def format_struct(structs, struct_key):
-    struct_format = "struct %s {\n%s\n}"
-    field_format = "\t%s %s"
+def format_struct(structs, struct_key, tabs='', single_tab='  '):
+    # tabs, structname, fields
+    struct_format = "%sstruct %s {\n%s%s}"
+    # tabs, single_tab, field type, field name
+    field_format = "%s%s%s %s;\n"
+    fields = ''
+    for field in structs[struct_key]:
+        maybe_struct_type = StructTuple(field.type, field.fieldsize)
+        maybe_struct_type_fields = structs.get(maybe_struct_type)
+        if maybe_struct_type_fields is not None \
+                    and field.type.find('<unnamed>') == -1:
+            fields += format_struct(structs, maybe_struct_type,
+                                    tabs + single_tab,
+                                    single_tab)
+            fields += ' %s;\n\n' % field.fieldname
+        else:
+            fields += field_format % (tabs, single_tab,
+                                      field.type,
+                                      field.fieldname)
+
+    full_format = struct_format % (tabs,
+                                   struct_key.structname,
+                                   fields, tabs)
+
+    return full_format
+
 
 
 if __name__ == '__main__':
