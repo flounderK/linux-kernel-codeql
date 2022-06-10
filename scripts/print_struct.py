@@ -12,7 +12,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--structname", help="Name of struct to print")
     parser.add_argument("-c", "--csv", help="Path of csv file",
-                        default="all_struct_fields.csv")
+                        default="all_struct_fields_no_fieldsize.csv")
     parser.add_argument("-ne", "--no-expand", action='store_true',
                         default=False)
     parser.add_argument("-no", "--no-offsets", action='store_true',
@@ -46,27 +46,74 @@ def get_contents(file):
                 first_row.append(val)
                 casts.append(str)
 
+        set_default_fieldsize = False
+
+        if 'fieldsize' not in colnames:
+            colnames.append('fieldsize')
+            set_default_fieldsize = True
+
         Row = namedtuple("Row", colnames)
+
+        # Hack to add a fieldsize value, even if it wasn't
+        # actually in the csv
+        if set_default_fieldsize:
+            Row.__new__.__defaults__ = (0,)
 
         contents.append(Row(*first_row))
 
+        # set the values in the csv to their expected types,
+        # creating new rows
         for row in csvreader:
             contents.append(Row(*[a(b) for a, b in zip(casts, row)]))
         return contents
 
 
 def group_struct_fields(struct_fields):
-    # group structs by struct name and struct size, deduping duplicate fields
+    """
+    Group structs by struct name and struct size,
+    deduping duplicate fields. Return a mapping of structs by  a tuple of
+    (structname, structsize) => [..., struct fields, ...]
+    """
+    # Group structs by struct name and struct size, deduping duplicate fields.
     structsets = defaultdict(set)
     for s in struct_fields:
         structsets[(s.structname, s.structsize)].add(s)
 
     grouped_structs = [list(i) for i in structsets.values()]
+    # sort fields by field offset
     grouped_structs = [sorted(i, key=lambda a: a.offset) for i in grouped_structs]
+
+    fixed_grouped_structs = []
+    for structfields in grouped_structs:
+        fixed_structfields = []
+        structfields_len = len(structfields)
+
+        # skip this if fieldsize is actually populated
+        if any([field.fieldsize for field in structfields]):
+            fixed_structfields = structfields
+            fixed_grouped_structs.append(fixed_structfields)
+            continue
+
+        if structfields_len == 1:
+            new_fields = structfields[0]._replace(fieldsize=structfields[0].structsize)
+            fixed_structfields.append(new_fields)
+            fixed_grouped_structs.append(fixed_structfields)
+            continue
+
+        for ind in range(0, structfields_len-1):
+            field = structfields[ind]
+            next_field = structfields[ind+1]
+            field_size = next_field.offset - field.offset
+            fixed_structfields.append(field._replace(fieldsize=field_size))
+
+        last_fieldsize = next_field.structsize - next_field.offset
+        fixed_structfields.append(next_field._replace(fieldsize=last_fieldsize))
+
+        fixed_grouped_structs.append(fixed_structfields)
 
     # then store by structname
     structs = {}
-    for s in grouped_structs:
+    for s in fixed_grouped_structs:
         structs[StructTuple(s[0].structname, s[0].structsize)] = s
     return structs
 
