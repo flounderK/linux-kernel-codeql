@@ -19,6 +19,10 @@ def parse_args(argv):
                         default=False)
     parser.add_argument("-l", "--list", help="List out valid struct names",
                         action='store_true', default=False)
+    parser.add_argument("--elastic",
+                        help="filter to only elastically sized structs",
+                        action='store_true',
+                        default=False)
     parser.add_argument("--all", help="print all structs", action='store_true',
                         default=False)
 
@@ -118,6 +122,31 @@ def group_struct_fields(struct_fields):
     return structs
 
 
+def get_elastic_structs(structs):
+    """
+    Filter out all of the structs that appear to be an unchanging size
+    """
+    elastic_structs = {}
+    for s, fs in structs.items():
+        if fs[-1].fieldsize != 0:
+            continue
+        # Ignore unsupported unions and structs
+        if s.structname.find('<unnamed>') != -1:
+            continue
+        last_type = fs[-1].type
+        # ignore everything that doesn't look like an array
+        brac_ind = last_type.find('[')
+        if brac_ind == -1:
+            continue
+        # ignore types that are just pointers to arrays
+        star_ind = last_type.find('*')
+        if star_ind < brac_ind and star_ind != -1:
+            continue
+
+        elastic_structs[s] = fs
+    return elastic_structs
+
+
 class StructFormatter:
     def __init__(self, structs, expand=True, offsets=True,
                  single_tab='  '):
@@ -184,6 +213,10 @@ if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
     contents = get_contents(args.csv)
     structs = group_struct_fields(contents)
+
+    if args.elastic:
+        structs = get_elastic_structs(structs)
+
     sf = StructFormatter(structs, expand=not args.no_expand,
                          offsets=not args.no_offsets)
 
